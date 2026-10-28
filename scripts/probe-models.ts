@@ -8,7 +8,7 @@ import { metaExtractor, PROMPT_VERSION, type EvidenceForModel } from '../src/met
 import { ffmpegAvailable, toWav } from '../src/meta/audio.ts';
 
 const cfg: MetaConfig = {
-  apiKey: process.env.META_API_KEY ?? '',
+  apiKey: (process.env.META_API_KEY ?? '').trim(),
   baseUrl: process.env.META_BASE_URL ?? 'https://api.meta.ai/v1',
   textModel: process.env.META_TEXT_MODEL ?? 'muse-spark-1.3',
   transcribeModel: process.env.META_TRANSCRIBE_MODEL ?? 'muse-voice-transcribe-1.0',
@@ -40,6 +40,8 @@ async function run(name: string, evidence: EvidenceForModel[], expect: Record<st
     } catch (e) {
       results.push({ name, run: i, ms: Date.now() - t0, schemaValid: false, error: (e as Error).message });
       console.log(`${name} #${i}: ERROR ${(e as Error).message}`);
+      // Account problems won't fix themselves on the next call.
+      if ([401, 402, 403].includes((e as { status?: number }).status ?? 0)) { console.log('Stopping: fix the account first.'); process.exit(1); }
     }
   }
 }
