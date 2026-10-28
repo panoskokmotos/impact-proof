@@ -131,6 +131,31 @@ export function audit(db: Db, caseId: string, actor: string, action: string, fro
     .run(caseId, actor, action, from, to, version, JSON.stringify(detail ?? null), now());
 }
 
+export type ImpactStats = { confirmed: number; medianMinutes: number | null; drafted: number; corrected: number };
+
+/**
+ * Measured from this tenant's own audit trail: minutes from the first message to the first
+ * confirmation, and how many model-drafted facts the reviewer had to change.
+ */
+export function impactStats(db: Db, tenantId: string): ImpactStats {
+  const rows = db.prepare(`
+    SELECT c.id, MIN(CASE WHEN a.action='case_created' THEN a.at END) AS created,
+           MIN(CASE WHEN a.action='confirmed' THEN a.at END) AS confirmed,
+           (SELECT detail FROM audit WHERE case_id=c.id AND action='confirmed' ORDER BY id LIMIT 1) AS detail
+    FROM cases c JOIN audit a ON a.case_id=c.id WHERE c.tenant_id=? GROUP BY c.id`).all(tenantId) as { created: string | null; confirmed: string | null; detail: string | null }[];
+  const done = rows.filter((r) => r.created && r.confirmed);
+  const minutes = done.map((r) => (Date.parse(r.confirmed!) - Date.parse(r.created!)) / 60_000).sort((a, b) => a - b);
+  let drafted = 0;
+  let corrected = 0;
+  for (const r of done) {
+    const d = JSON.parse(r.detail ?? 'null') as { drafted?: number; corrected?: string[] } | null;
+    drafted += d?.drafted ?? 0;
+    corrected += d?.corrected?.length ?? 0;
+  }
+  const mid = minutes.length ? (minutes.length % 2 ? minutes[(minutes.length - 1) / 2] : (minutes[minutes.length / 2 - 1] + minutes[minutes.length / 2]) / 2) : null;
+  return { confirmed: done.length, medianMinutes: mid === null ? null : Math.round(mid * 10) / 10, drafted, corrected };
+}
+
 export function deleteCase(db: Db, id: string): string[] {
   const paths = (db.prepare('SELECT path FROM evidence WHERE case_id=? AND path IS NOT NULL').all(id) as { path: string }[]).map((r) => r.path);
   for (const t of ['evidence', 'model_runs', 'reports', 'audit']) db.prepare(`DELETE FROM ${t} WHERE case_id=?`).run(id);

@@ -11,4 +11,5 @@
 | Date | Work |
 |---|---|
 | 27 Oct | Domain rules (facts, state machine, report, totals), Meta client and extraction schema, WhatsApp webhook/send/media, durable worker, reviewer UI, donor report, 19 tests, probe and replay scripts |
+| 28 Oct | Impact metric from the audit trail: median minutes from first message to confirmed report, and facts the reviewer changed vs drafted; audit records only real corrections |
 | | |

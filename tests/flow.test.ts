@@ -142,6 +142,23 @@ test('reviewer flow over HTTP: unauthenticated and cross-tenant are blocked; con
   } finally { t.close(); }
 });
 
+test('impact stats count only facts the reviewer really changed', async () => {
+  const t = await startTestApp(EIGHT_BOXES);
+  try {
+    await t.webhook([text('wamid.1', 'eight boxes')]);
+    await t.drain();
+    const ana = await t.login('ana@demo.org');
+    // Prefilled item/unit/status are sent back unchanged; only the quantity is corrected.
+    await t.post('/cases/DEMO-001/review', ana, { item: 'food boxes', quantity: '7', unit: 'Boxes', delivery_status: 'delivered', decision: 'confirm', reason: '' });
+    const s = store.impactStats(t.db, 't1');
+    assert.equal(s.confirmed, 1);
+    assert.equal(s.drafted, 4);
+    assert.equal(s.corrected, 1);
+    assert.ok(s.medianMinutes !== null && s.medianMinutes >= 0);
+    assert.match(await (await fetch(`${t.base}/cases`, { headers: { cookie: ana } })).text(), /The reviewer changed or added <b>1<\/b>/);
+  } finally { t.close(); }
+});
+
 test('webhook verification echoes the challenge only with the right token', async () => {
   const t = await startTestApp(EIGHT_BOXES);
   try {

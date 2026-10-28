@@ -1,4 +1,4 @@
-import type { CaseRecord } from '../store.ts';
+import type { CaseRecord, ImpactStats } from '../store.ts';
 import type { DonorReport } from '../domain/report.ts';
 import type { Assertion } from '../domain/types.ts';
 
@@ -39,13 +39,17 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
 <button>Sign in</button></form>`);
 }
 
-export function inboxPage(user: { email: string; tenantName: string }, cases: CaseRecord[], totals: { item: string; unit: string; quantity: number; cases: number }[]) {
+export function inboxPage(user: { email: string; tenantName: string }, cases: CaseRecord[], totals: { item: string; unit: string; quantity: number; cases: number }[], stats: ImpactStats) {
   const rows = cases.map((c) => `<tr><td><a href="/cases/${esc(c.id)}">${esc(c.id)}</a></td><td>${statusPill(c.status)}</td>
 <td>${esc(summary(c.assertions))}</td><td>${c.flags.length ? `⚠ ${c.flags.length}` : ''}</td><td class="muted">${esc(c.updatedAt.slice(0, 16).replace('T', ' '))}</td></tr>`).join('');
   return page('Cases', `<h1>Delivery cases</h1>
 <section class="card"><h2>Confirmed totals</h2>
 ${totals.length ? `<ul>${totals.map((t) => `<li><b>${t.quantity} ${esc(t.unit)}</b> of ${esc(t.item)} <span class="muted">(${t.cases} case${t.cases > 1 ? 's' : ''})</span></li>`).join('')}</ul>` : '<p class="muted">No confirmed cases yet.</p>'}
 <p class="muted small">Counted in code from nonprofit-confirmed cases only. Disputed and unreviewed cases are not counted.</p></section>
+<section class="card"><h2>Measured on these cases</h2>
+${stats.confirmed ? `<ul><li>Median <b>${stats.medianMinutes} min</b> from the field worker's first message to a confirmed report (${stats.confirmed} case${stats.confirmed > 1 ? 's' : ''})</li>
+<li>The model drafted <b>${stats.drafted}</b> facts. The reviewer changed or added <b>${stats.corrected}</b>.</li></ul>` : '<p class="muted">Shown once a case is confirmed.</p>'}
+<p class="muted small">From this nonprofit's own audit trail. Elapsed time includes waiting for the reviewer, not only work time.</p></section>
 <div class="scroll"><table><thead><tr><th>Case</th><th>Status</th><th>Facts</th><th>Flags</th><th>Updated</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="muted">No cases yet. Send a WhatsApp message from an allowlisted phone, or use <a href="/upload">web upload</a>.</td></tr>'}</tbody></table></div>
 <p><a href="/upload">Web upload fallback</a></p>`, user);
 }

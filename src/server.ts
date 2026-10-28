@@ -4,6 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import { buildReport, totals } from './domain/report.ts';
 import { review, TransitionError } from './domain/state.ts';
+import { normalize } from './domain/facts.ts';
 import type { Actor, FactField, ReviewInput } from './domain/types.ts';
 import * as store from './store.ts';
 import * as views from './web/views.ts';
@@ -142,7 +143,7 @@ export function createApp(d: Deps, cfg: AppConfig) {
 
     if (path === '/' || path === '/cases') {
       const cases = store.listCases(d.db, user.tenantId);
-      return send(res, 200, views.inboxPage(user, cases, totals(cases)));
+      return send(res, 200, views.inboxPage(user, cases, totals(cases), store.impactStats(d.db, user.tenantId)));
     }
 
     const ev = m(/^\/evidence\/(ev_[a-f0-9]+)$/);
@@ -181,10 +182,16 @@ export function createApp(d: Deps, cfg: AppConfig) {
           else if (cur && cur.value === corrections[k] && input.decision === 'dispute') delete corrections[k];
         }
         if (!input.publishPlace) delete corrections.place;
+        // Fields the reviewer actually changed from the draft, for the accuracy metric. Prefilled values don't count.
+        const changed = (Object.keys(corrections) as FactField[]).filter((k) => {
+          const cur = [...c.assertions].reverse().find((a) => a.field === k);
+          return !cur || normalize(k, cur.value) !== normalize(k, corrections[k]!);
+        });
+        const drafted = new Set(c.assertions.filter((a) => a.kind !== 'reviewer_confirmed').map((a) => a.field)).size;
         try {
           const next = review(c, actor, input, allowed);
           store.saveCase(d.db, next);
-          store.audit(d.db, id, user.email, input.decision === 'confirm' ? 'confirmed' : 'disputed', c.status, next.status, next.version, { reason: input.reason, corrected: Object.keys(corrections) });
+          store.audit(d.db, id, user.email, input.decision === 'confirm' ? 'confirmed' : 'disputed', c.status, next.status, next.version, { reason: input.reason, corrected: changed, drafted });
         } catch (e) {
           if (e instanceof TransitionError && e.status === 400 || (e as TransitionError).status === 409) return redirect(res, `/cases/${id}?error=${encodeURIComponent((e as Error).message)}`);
           throw e;
