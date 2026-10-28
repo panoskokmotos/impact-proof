@@ -15,9 +15,10 @@ Built solo by a Givelink co-founder for the Meta Global AI Developer Hackathon, 
 
 ## Run it
 
-Needs Node 24 (no build step, no dependencies) and `ffmpeg` for voice notes (`brew install ffmpeg`).
+Needs Node 24 (no build step). `npm install` adds one dependency, `ffmpeg-static`, a prebuilt ffmpeg for converting voice notes. A system `ffmpeg` or `FFMPEG_PATH` is used first if present.
 
 ```bash
+npm install
 cp .env.example .env    # fill in the values below
 npm test                # 19 tests: the adversarial pack's rules and the full webhook-to-report flow
 npm run probe -- photo.jpg voice.ogg   # first-hour check of your Meta account, 3 runs per fixture
