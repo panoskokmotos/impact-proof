@@ -22,7 +22,7 @@ export type InboundMessage = {
   mime: string | null;
 };
 
-export type StatusUpdate = { messageId: string; status: string };
+export type StatusUpdate = { messageId: string; status: string; error: string | null };
 
 /** Splits a webhook payload into user messages and outbound-message status callbacks. */
 export function parseWebhook(body: unknown): { messages: InboundMessage[]; statuses: StatusUpdate[] } {
@@ -45,7 +45,8 @@ export function parseWebhook(body: unknown): { messages: InboundMessage[]; statu
         });
       }
       for (const s of (change.value.statuses ?? []) as Record<string, any>[]) {
-        statuses.push({ messageId: String(s.id), status: String(s.status) });
+        const err = s.errors?.[0];
+        statuses.push({ messageId: String(s.id), status: String(s.status), error: err ? `${err.code}: ${err.title ?? err.message ?? ''}` : null });
       }
     }
   }

@@ -108,7 +108,7 @@ export function createApp(d: Deps, cfg: AppConfig) {
         if (store.recordInbound(d.db, msg.messageId, channel, msg.from, ev)) store.enqueue(d.db, 'message', `msg:${msg.messageId}`, { messageId: msg.messageId });
       }
       // Status callbacks track our outbound message only. They never touch a case's delivery status.
-      for (const s of statuses) d.db.prepare('UPDATE outbound SET wa_status=? WHERE wa_message_id=?').run(s.status, s.messageId);
+      for (const s of statuses) d.db.prepare('UPDATE outbound SET wa_status=?, error=COALESCE(?, error) WHERE wa_message_id=?').run(s.status, s.error, s.messageId);
       return send(res, 200, 'OK', 'text/plain');
     }
 
