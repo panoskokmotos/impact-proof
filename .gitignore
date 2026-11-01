@@ -5,3 +5,4 @@ data/
 tests/fixtures/media/private-*
 *.env
 !.env.example
+.DS_Store
