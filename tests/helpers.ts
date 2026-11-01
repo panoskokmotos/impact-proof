@@ -28,9 +28,10 @@ export async function startTestApp(script: Script) {
     dataDir: dir,
     extract: async (ev) => ({ extraction: { question: null, suspiciousInstructions: [], dropped: [], ...script(ev) }, model: 'test-double', usage: null, ms: 1 }),
     transcribe: async (audio) => ({ text: audio.toString('utf8'), model: 'test-double', ms: 1 }),
+    frames: async (video) => [Buffer.from(`${video.toString('utf8')}:frame1`)],
     whatsapp: {
       async sendText(to, body) { sent.push({ to, body }); return { messageId: `wamid.out${sent.length}` }; },
-      async downloadMedia(id) { return { bytes: Buffer.from(`media:${id}`), mime: id.startsWith('aud') ? 'audio/ogg' : 'image/jpeg' }; },
+      async downloadMedia(id) { return { bytes: Buffer.from(`media:${id}`), mime: id.startsWith('aud') ? 'audio/ogg' : id.startsWith('vid') ? 'video/mp4' : 'image/jpeg' }; },
     },
     caseWindowMinutes: 30,
     retentionDays: 14,
@@ -65,7 +66,8 @@ export async function startTestApp(script: Script) {
 }
 
 export const text = (id: string, body: string, from = PHONE) => ({ id, from, timestamp: '1793000000', type: 'text', text: { body } });
-export const image = (id: string, mediaId: string, from = PHONE) => ({ id, from, timestamp: '1793000000', type: 'image', image: { id: mediaId, mime_type: 'image/jpeg' } });
+export const image = (id: string, mediaId: string, from = PHONE, caption?: string) => ({ id, from, timestamp: '1793000000', type: 'image', image: { id: mediaId, mime_type: 'image/jpeg', ...(caption ? { caption } : {}) } });
+export const video = (id: string, mediaId: string, from = PHONE, caption?: string) => ({ id, from, timestamp: '1793000000', type: 'video', video: { id: mediaId, mime_type: 'video/mp4', ...(caption ? { caption } : {}) } });
 
 export const fact = (field: Assertion['field'], value: string, evidenceId: string, kind: Assertion['kind'] = 'reported'): Assertion =>
   ({ field, value, kind, evidenceId, quote: value });

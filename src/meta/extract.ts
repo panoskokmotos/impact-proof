@@ -6,7 +6,7 @@ export const PROMPT_VERSION = 'extract-v2';
 
 export type EvidenceForModel =
   | { id: string; kind: 'text' | 'transcript'; text: string }
-  | { id: string; kind: 'image'; mime: string; base64: string };
+  | { id: string; kind: 'image'; mime: string; base64: string; label?: 'photo' | 'video frame' };
 
 export type Extraction = {
   assertions: Assertion[];
@@ -57,6 +57,7 @@ If a photo is too blurry, dark or cropped to count the items, the follow-up ques
 - place: the place as stated. time: the date/time as stated, ISO 8601 if clear.
 - delivery_status: "delivered", "not_yet_delivered" or "unclear". Watch for negation ("we haven't delivered yet" = not_yet_delivered).
 kind "reported" = said or written by the worker. kind "observed" = visible in a photo.
+Video frames are stills from one video: count each item once across all frames, never add up the same items seen in several frames.
 From a photo: only emit quantity if you can count the items clearly (that is the VISIBLE count, not the total). Only emit item if a label is readable. A photo never proves contents, location or recipient, so never emit place or delivery_status from a photo.
 If a fact is not stated or not clearly visible, do not emit it. Never guess.
 evidence_id must be the id shown before each evidence item.
@@ -66,7 +67,7 @@ export function buildMessages(evidence: EvidenceForModel[]) {
   const content: unknown[] = [{ type: 'text', text: 'Evidence for one delivery case follows.' }];
   for (const e of evidence) {
     if (e.kind === 'image') {
-      content.push({ type: 'text', text: `[evidence_id=${e.id}] photo:` });
+      content.push({ type: 'text', text: `[evidence_id=${e.id}] ${e.label ?? 'photo'}:` });
       content.push({ type: 'image_url', image_url: { url: `data:${e.mime};base64,${e.base64}` } });
     } else {
       content.push({ type: 'text', text: `[evidence_id=${e.id}] ${e.kind === 'transcript' ? 'voice note transcript' : 'text message'}:\n"""${e.text}"""` });

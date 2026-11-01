@@ -150,8 +150,19 @@ export function createApp(d: Deps, cfg: AppConfig) {
     if (ev) {
       const row = d.db.prepare('SELECT e.path, e.mime, c.tenant_id FROM evidence e JOIN cases c ON c.id=e.case_id WHERE e.id=?').get(ev[1]) as { path: string; mime: string; tenant_id: string } | undefined;
       if (!row || row.tenant_id !== user.tenantId || !row.path) return send(res, 404, 'Not found', 'text/plain');
-      res.writeHead(200, { 'Content-Type': row.mime, 'Cache-Control': 'private, max-age=300', 'X-Content-Type-Options': 'nosniff' });
-      return res.end(readFileSync(row.path));
+      const bytes = readFileSync(row.path);
+      const headers = { 'Content-Type': row.mime, 'Cache-Control': 'private, max-age=300', 'X-Content-Type-Options': 'nosniff', 'Accept-Ranges': 'bytes' };
+      // Safari plays video only through byte ranges.
+      const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range ?? ''));
+      if (range && (range[1] || range[2])) {
+        const start = range[1] ? Number(range[1]) : Math.max(0, bytes.length - Number(range[2]));
+        const end = range[1] && range[2] ? Math.min(Number(range[2]), bytes.length - 1) : bytes.length - 1;
+        if (start > end || start >= bytes.length) { res.writeHead(416, { 'Content-Range': `bytes */${bytes.length}` }); return res.end(); }
+        res.writeHead(206, { ...headers, 'Content-Range': `bytes ${start}-${end}/${bytes.length}`, 'Content-Length': end - start + 1 });
+        return res.end(bytes.subarray(start, end + 1));
+      }
+      res.writeHead(200, { ...headers, 'Content-Length': bytes.length });
+      return res.end(bytes);
     }
 
     const cm = m(/^\/cases\/(DEMO-\d+)(?:\/(review|retry|delete|report))?$/);
@@ -245,7 +256,7 @@ export function createApp(d: Deps, cfg: AppConfig) {
         mkdirSync(join(d.dataDir, 'uploads'), { recursive: true });
         const local = join(d.dataDir, 'uploads', id);
         writeFileSync(local, Buffer.from(await file.arrayBuffer()), { mode: 0o600 });
-        add({ ...base, messageId: id, type: mime.startsWith('image/') ? 'image' : 'audio', text: null, mime, localFile: local });
+        add({ ...base, messageId: id, type: mime.startsWith('image/') ? 'image' : mime.startsWith('video/') ? 'video' : 'audio', text: null, mime, localFile: local });
       }
       if (text) add({ ...base, messageId: `web.${randomBytes(8).toString('hex')}`, type: 'text', text, mime: null });
       return redirect(res, '/upload?msg=' + encodeURIComponent('Sent. It will appear in Cases in a few seconds.'));

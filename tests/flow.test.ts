@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { byPhrase, image, startTestApp, text, fact, PHONE } from './helpers.ts';
+import { byPhrase, image, video, startTestApp, text, fact, PHONE } from './helpers.ts';
 import * as store from '../src/store.ts';
 
 const EIGHT_BOXES = byPhrase({
@@ -197,5 +197,34 @@ test('only the first message from a sender gets the voice-note tip', async () =>
     await t.drain();
     assert.match(t.sent[0].body, /Tip: the fastest way is a voice note/);
     assert.doesNotMatch(t.sent[1].body, /Tip:/);
+  } finally { t.close(); }
+});
+
+test('a video is read as frames plus its sound, and its caption is kept', async () => {
+  const t = await startTestApp(byPhrase({
+    ':frame1': [['quantity', '6']],
+    'παραδώσαμε': [['item', 'κιβώτια τροφίμων'], ['quantity', '6'], ['unit', 'κιβώτια'], ['delivery_status', 'delivered']],
+    'Κυψέλη': [['place', 'Κυψέλη']],
+  }));
+  try {
+    // The test transcriber returns the bytes as text, so this "video" says «παραδώσαμε».
+    await t.webhook([video('wamid.v', 'vid-παραδώσαμε', PHONE, 'Κυψέλη')]);
+    await t.drain();
+    const c = store.getCase(t.db, 'DEMO-001')!;
+    const kinds = (t.db.prepare('SELECT kind FROM evidence WHERE case_id=? ORDER BY kind').all('DEMO-001') as { kind: string }[]).map((r) => r.kind);
+    assert.deepEqual(kinds, ['text', 'video']);
+    const seen = c.assertions.find((a) => a.kind === 'observed');
+    assert.ok(seen && !seen.evidenceId!.includes('.f'), 'a fact seen in a frame points to the video itself');
+    assert.ok(c.assertions.some((a) => a.field === 'place' && a.value === 'Κυψέλη'));
+    assert.equal(c.status, 'ready_for_review');
+  } finally { t.close(); }
+});
+
+test('a WhatsApp photo caption is kept as the sender\'s words', async () => {
+  const t = await startTestApp(EIGHT_BOXES);
+  try {
+    await t.webhook([image('wamid.p', 'img-1', PHONE, 'demo delivery: eight boxes of food, delivered')]);
+    await t.drain();
+    assert.equal(store.getCase(t.db, 'DEMO-001')!.status, 'ready_for_review');
   } finally { t.close(); }
 });

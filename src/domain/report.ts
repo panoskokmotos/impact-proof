@@ -57,7 +57,7 @@ export function buildReport(c: Case, ctx: { sources: string[]; modelDrafted: boo
   };
 }
 
-const SOURCE_NAMES: Record<string, string> = { image: 'photo', audio: 'voice note', text: 'message' };
+const SOURCE_NAMES: Record<string, string> = { image: 'photo', audio: 'voice note', video: 'video', text: 'message' };
 function listOf(kinds: string[]) {
   const names = [...new Set(kinds.map((k) => SOURCE_NAMES[k] ?? k))];
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];

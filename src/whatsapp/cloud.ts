@@ -13,7 +13,7 @@ export type WhatsApp = {
 };
 
 const MAX_MEDIA_BYTES = 16 * 1024 * 1024;
-export const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/aac', 'audio/amr', 'audio/wav'];
+export const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/aac', 'audio/amr', 'audio/wav', 'video/mp4', 'video/3gpp', 'video/quicktime'];
 
 export function cloudWhatsApp(cfg: WhatsAppConfig): WhatsApp {
   const graph = `https://graph.facebook.com/${cfg.graphVersion}`;

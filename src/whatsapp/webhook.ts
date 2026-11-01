@@ -16,7 +16,7 @@ export type InboundMessage = {
   messageId: string;
   from: string;
   timestamp: number;
-  type: 'text' | 'image' | 'audio' | 'other';
+  type: 'text' | 'image' | 'audio' | 'video' | 'other';
   text: string | null;
   mediaId: string | null;
   mime: string | null;
@@ -33,15 +33,15 @@ export function parseWebhook(body: unknown): { messages: InboundMessage[]; statu
     for (const change of entry.changes ?? []) {
       if (change.field !== 'messages' || !change.value) continue;
       for (const m of (change.value.messages ?? []) as Record<string, any>[]) {
-        const type = m.type === 'text' || m.type === 'image' || m.type === 'audio' ? m.type : 'other';
+        const type = m.type === 'text' || m.type === 'image' || m.type === 'audio' || m.type === 'video' ? m.type : 'other';
         messages.push({
           messageId: String(m.id),
           from: String(m.from),
           timestamp: Number(m.timestamp) || Math.floor(Date.now() / 1000),
           type,
-          text: type === 'text' ? String(m.text?.body ?? '') : type === 'image' ? (m.image?.caption ?? null) : null,
-          mediaId: m.image?.id ?? m.audio?.id ?? null,
-          mime: m.image?.mime_type ?? m.audio?.mime_type ?? null,
+          text: type === 'text' ? String(m.text?.body ?? '') : type === 'image' ? (m.image?.caption ?? null) : type === 'video' ? (m.video?.caption ?? null) : null,
+          mediaId: m.image?.id ?? m.audio?.id ?? m.video?.id ?? null,
+          mime: m.image?.mime_type ?? m.audio?.mime_type ?? m.video?.mime_type ?? null,
         });
       }
       for (const s of (change.value.statuses ?? []) as Record<string, any>[]) {

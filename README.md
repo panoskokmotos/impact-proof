@@ -1,6 +1,6 @@
 # Impact Proof
 
-Someone at the nonprofit, staff or a field worker, sends a WhatsApp photo or voice note, the fastest way being a 5-second voice note. A Meta Muse model drafts a delivery case with every fact linked to its source. An authorized nonprofit reviewer confirms, corrects or disputes it. The donor sees a report that says what was confirmed, by whom, and what it cannot prove.
+Someone at the nonprofit, staff or a field worker, sends a WhatsApp photo, video or voice note, the fastest way being a 5-second voice note or a short narrated video. A Meta Muse model drafts a delivery case with every fact linked to its source. An authorized nonprofit reviewer confirms, corrects or disputes it. The donor sees a report that says what was confirmed, by whom, and what it cannot prove.
 
 Built solo by a Givelink co-founder for the Meta Global AI Developer Hackathon, with staged demo data. Not deployed with Givelink or any partner nonprofit.
 
@@ -20,7 +20,7 @@ Needs Node 24 (no build step). `npm install` adds one dependency, `ffmpeg-static
 ```bash
 npm install
 cp .env.example .env    # fill in the values below
-npm test                # 27 tests: the adversarial pack's rules and the full webhook-to-report flow
+npm test                # 29 tests: the adversarial pack's rules and the full webhook-to-report flow
 npm run probe -- photo.jpg voice.ogg   # first-hour check of your Meta account, 3 runs per fixture
 npm start               # http://localhost:3000, status at /health
 ```

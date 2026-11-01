@@ -77,6 +77,7 @@ export function casePage(
   const ev = evidence.map((e) => `<div class="ev"><div class="muted small">${esc(e.id)} · ${esc(e.kind)} · ${esc(CHANNEL_LABEL[e.channel] ?? e.channel)} · ${esc(String(e.received_at).slice(11, 19))}</div>
 ${e.kind === 'image' && e.path ? `<img src="/evidence/${esc(e.id)}" alt="Delivery photo ${esc(e.id)}">` : ''}
 ${e.kind === 'audio' && e.path ? `<audio controls src="/evidence/${esc(e.id)}"></audio>` : ''}
+${e.kind === 'video' && e.path ? `<video controls preload="metadata" src="/evidence/${esc(e.id)}"></video>` : ''}
 ${e.text ? `<blockquote>${esc(e.text)}</blockquote>` : ''}
 ${e.error ? `<p class="err small">${esc(e.error)}</p>` : ''}</div>`).join('');
   const last = (k: Assertion['field'], line = 1) => currentValue(c.assertions, k, line)?.value ?? '';
@@ -145,7 +146,7 @@ export function uploadPage(user: { email: string; tenantName: string }, phones: 
 ${msg ? `<p>${esc(msg)}</p>` : ''}
 <form method="post" action="/upload" enctype="multipart/form-data" class="card stack">
 <label>Sender<select name="from">${phones.map((p) => `<option value="${esc(p)}">…${esc(p.slice(-4))}</option>`).join('')}</select></label>
-<label>Photo or voice note<input type="file" name="file" accept="image/jpeg,image/png,image/webp,audio/*"></label>
+<label>Photo, video or voice note<input type="file" name="file" accept="image/jpeg,image/png,image/webp,audio/*,video/mp4,video/quicktime,video/3gpp"></label>
 <label>Text<textarea name="text" rows="3"></textarea></label>
 <button>Send</button></form>`, user);
 }
@@ -165,7 +166,7 @@ h1{font-size:1.4rem}h2{font-size:1rem;margin:0 0 .6rem}a{color:var(--accent)}
 .pill{display:inline-block;font-size:.75rem;padding:.1rem .5rem;border-radius:99px;border:1px solid var(--line);vertical-align:middle}
 .s-confirmed{background:var(--accent);color:var(--card)}.s-disputed{background:var(--err);color:#fff}.s-needs_clarification{background:var(--warnbg);color:var(--warn)}
 .muted{color:var(--muted)}.small{font-size:.8rem}.err{color:var(--err)}.warn{background:var(--warnbg);color:var(--warn);padding:.4rem .6rem;border-radius:6px}
-.ev{border-bottom:1px solid var(--line);padding:.5rem 0}.ev img{max-width:100%;border-radius:6px}blockquote{margin:.3rem 0;padding-left:.7rem;border-left:3px solid var(--line)}
+.ev{border-bottom:1px solid var(--line);padding:.5rem 0}.ev img,.ev video{max-width:100%;border-radius:6px}blockquote{margin:.3rem 0;padding-left:.7rem;border-left:3px solid var(--line)}
 .stack{display:flex;flex-direction:column;gap:.7rem}.row{display:flex;gap:.7rem;flex-wrap:wrap}.row label{flex:1 1 150px}
 label{display:flex;flex-direction:column;gap:.2rem;font-size:.85rem;color:var(--muted)}label.inline{flex-direction:row;align-items:center}
 input,select,textarea{font:inherit;padding:.45rem;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}

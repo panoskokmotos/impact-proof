@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { transcribeWav, type MetaConfig } from './meta/client.ts';
-import { ffmpegAvailable, toWav } from './meta/audio.ts';
+import { ffmpegAvailable, toWav, videoFrames } from './meta/audio.ts';
 import { metaExtractor } from './meta/extract.ts';
 import { createApp, type Reviewer } from './server.ts';
 import { openDb } from './store.ts';
@@ -62,6 +62,7 @@ const deps = {
     const { text } = await transcribeWav(meta, await toWav(audio));
     return { text, model: meta.transcribeModel, ms: Date.now() - t0 };
   },
+  frames: videoFrames,
   whatsapp: waReady ? cloudWhatsApp(wa) : null,
   caseWindowMinutes: Number(env('CASE_WINDOW_MINUTES', '30')),
   retentionDays: Number(env('RETENTION_DAYS', '14')),

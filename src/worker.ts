@@ -14,6 +14,7 @@ export type Deps = {
   dataDir: string;
   extract: Extractor;
   transcribe: (audio: Buffer) => Promise<{ text: string; model: string; ms: number }>;
+  frames: (video: Buffer) => Promise<Buffer[]>;
   whatsapp: WhatsApp | null;
   caseWindowMinutes: number;
   retentionDays: number;
@@ -87,14 +88,19 @@ async function handleMessage(d: Deps, messageId: string) {
     if (!open) store.audit(d.db, c.id, 'system', 'case_created', null, 'received', 1, { channel: ev.channel });
     if (forceNew) { await enqueueReply(d, c.id, ev, `New case ${c.id} started. Send a photo or voice note.`); return; }
     const id = store.newId('ev');
-    const kind = ev.type === 'image' ? 'image' : ev.type === 'audio' ? 'audio' : 'text';
+    const kind = ev.type === 'image' || ev.type === 'audio' || ev.type === 'video' ? ev.type : 'text';
     d.db.prepare('INSERT INTO evidence (id, case_id, message_id, channel, kind, mime, text, received_at) VALUES (?,?,?,?,?,?,?,?)')
       .run(id, c.id, messageId, ev.channel, kind, ev.mime, ev.type === 'text' ? ev.text : null, store.now());
+    // A photo or video caption is the sender's own words: keep it as its own text evidence.
+    if (kind !== 'text' && ev.text?.trim()) {
+      d.db.prepare('INSERT INTO evidence (id, case_id, message_id, channel, kind, mime, text, received_at) VALUES (?,?,?,?,?,?,?,?)')
+        .run(store.newId('ev'), c.id, `${messageId}:caption`, ev.channel, 'text', null, ev.text.trim(), store.now());
+    }
     evidence = d.db.prepare('SELECT * FROM evidence WHERE id=?').get(id) as Record<string, any>;
   }
 
   // Media: fetch once, validate, keep private bytes under the evidence ID.
-  if ((evidence.kind === 'image' || evidence.kind === 'audio') && !evidence.path) {
+  if (['image', 'audio', 'video'].includes(evidence.kind) && !evidence.path) {
     try {
       let bytes: Buffer;
       let mime = ev.mime ?? 'application/octet-stream';
@@ -113,8 +119,8 @@ async function handleMessage(d: Deps, messageId: string) {
     }
   }
 
-  // Voice: transcribe once. If voice is unavailable the case still proceeds on the other evidence.
-  if (evidence.kind === 'audio' && evidence.path && evidence.text === null) {
+  // Voice, or the sound of a video: transcribe once. If voice is unavailable the case still proceeds on the other evidence.
+  if ((evidence.kind === 'audio' || evidence.kind === 'video') && evidence.path && evidence.text === null) {
     try {
       const t = await d.transcribe(readFileSync(evidence.path));
       d.db.prepare('UPDATE evidence SET text=?, error=NULL WHERE id=?').run(t.text, evidence.id);
@@ -122,7 +128,8 @@ async function handleMessage(d: Deps, messageId: string) {
         .run(c.id, 'transcribe', t.model, null, t.ms, store.now());
     } catch (e) {
       if (isTransient(e)) throw new Retryable((e as Error).message);
-      d.db.prepare('UPDATE evidence SET error=? WHERE id=?').run(`Voice unavailable: ${(e as Error).message}`, evidence.id);
+      // A silent video is still good evidence through its frames; only a voice note without voice is an error.
+      if (evidence.kind === 'audio') d.db.prepare('UPDATE evidence SET error=? WHERE id=?').run(`Voice unavailable: ${(e as Error).message}`, evidence.id);
       d.db.prepare('INSERT INTO model_runs (case_id, step, error, created_at) VALUES (?,?,?,?)').run(c.id, 'transcribe', (e as Error).message, store.now());
     }
   }
@@ -152,6 +159,12 @@ export async function extractCase(d: Deps, caseId: string) {
   for (const r of rows) {
     if (r.kind === 'image' && r.path) forModel.push({ id: r.id, kind: 'image', mime: r.mime, base64: readFileSync(r.path).toString('base64') });
     else if (r.kind === 'audio' && r.text) forModel.push({ id: r.id, kind: 'transcript', text: r.text });
+    else if (r.kind === 'video' && r.path) {
+      // A video is read as a few still frames plus what was said in it.
+      const shots = await d.frames(readFileSync(r.path)).catch(() => [] as Buffer[]);
+      shots.forEach((b, i) => forModel.push({ id: `${r.id}.f${i + 1}`, kind: 'image', mime: 'image/jpeg', base64: b.toString('base64'), label: 'video frame' }));
+      if (r.text) forModel.push({ id: r.id, kind: 'transcript', text: r.text });
+    }
     else if (r.kind === 'text' && r.text) forModel.push({ id: r.id, kind: 'text', text: r.text });
   }
   const greek = rows.some((r) => isGreek(r.text));
@@ -163,7 +176,8 @@ export async function extractCase(d: Deps, caseId: string) {
   if (forModel.length) {
     try {
       const out = await d.extract(forModel);
-      added = out.extraction.assertions;
+      // Facts seen in a video frame belong to the video itself.
+      added = out.extraction.assertions.map((a) => (a.evidenceId && /\.f\d+$/.test(a.evidenceId) ? { ...a, evidenceId: a.evidenceId.replace(/\.f\d+$/, '') } : a));
       question = out.extraction.question;
       if (out.extraction.suspiciousInstructions.length) flags.push('instruction_in_evidence');
       d.db.prepare('INSERT INTO model_runs (case_id, step, model, prompt_version, ms, usage, dropped, created_at) VALUES (?,?,?,?,?,?,?,?)')
