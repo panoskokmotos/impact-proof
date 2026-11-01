@@ -228,3 +228,18 @@ test('a WhatsApp photo caption is kept as the sender\'s words', async () => {
     assert.equal(store.getCase(t.db, 'DEMO-001')!.status, 'ready_for_review');
   } finally { t.close(); }
 });
+
+test('a browser form post with Origin: null works; a post from another site is refused', async () => {
+  const t = await startTestApp(EIGHT_BOXES);
+  try {
+    await t.webhook([text('wamid.1', 'demo delivery: eight boxes of food, delivered')]);
+    await t.drain();
+    const ana = await t.login('ana@demo.org');
+    const form = new URLSearchParams({ decision: 'confirm', reason: '' });
+    const fromBrowser = await fetch(`${t.base}/cases/DEMO-001/review`, { method: 'POST', redirect: 'manual', headers: { cookie: ana, origin: 'null' }, body: form });
+    assert.equal(fromBrowser.status, 303);
+    assert.equal(store.getCase(t.db, 'DEMO-001')!.status, 'confirmed');
+    const forged = await fetch(`${t.base}/cases/DEMO-001/review`, { method: 'POST', redirect: 'manual', headers: { cookie: ana, origin: 'https://evil.example' }, body: form });
+    assert.equal(forged.status, 403);
+  } finally { t.close(); }
+});

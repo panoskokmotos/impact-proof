@@ -37,7 +37,7 @@ async function readBody(req: Req, limit = 20 * 1024 * 1024): Promise<Buffer> {
 }
 
 const send = (res: ServerResponse, status: number, body: string, type = 'text/html; charset=utf-8', headers: Record<string, string> = {}) => {
-  res.writeHead(status, { 'Content-Type': type, 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', ...headers });
+  res.writeHead(status, { 'Content-Type': type, 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', ...headers });
   res.end(body);
 };
 const redirect = (res: ServerResponse, to: string, headers: Record<string, string> = {}) => { res.writeHead(303, { Location: to, ...headers }); res.end(); };
@@ -139,7 +139,7 @@ export function createApp(d: Deps, cfg: AppConfig) {
     const user = currentUser(req);
     if (!user) return req.method === 'GET' ? redirect(res, '/login') : send(res, 401, 'Sign in as a reviewer', 'text/plain');
     // SameSite=Lax blocks cross-site POSTs; also reject a foreign Origin outright.
-    if (req.method === 'POST' && req.headers.origin && new URL(req.headers.origin).host !== req.headers.host) return send(res, 403, 'Cross-site request', 'text/plain');
+    if (req.method === 'POST' && crossSite(req.headers.origin, req.headers.host)) return send(res, 403, 'Cross-site request', 'text/plain');
 
     if (path === '/' || path === '/cases') {
       const cases = store.listCases(d.db, user.tenantId);
@@ -274,4 +274,13 @@ export function createApp(d: Deps, cfg: AppConfig) {
       if (!res.headersSent) send(res, status, status === 500 ? 'Something went wrong' : (e as Error).message, 'text/plain');
     }
   };
+}
+
+/**
+ * A form posted from another site. "null" (privacy settings, some redirects) can't be checked here;
+ * the session cookie is SameSite=Lax, so such a request arrives signed out anyway.
+ */
+export function crossSite(origin: string | undefined, host: string | undefined): boolean {
+  if (!origin || origin === 'null') return false;
+  try { return new URL(origin).host !== host; } catch { return true; }
 }
