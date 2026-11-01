@@ -48,7 +48,7 @@ export function buildReport(c: Case, ctx: { sources: string[]; modelDrafted: boo
     items: confirmedItems(c),
     lines,
     limits: [
-      `Confirmed by the nonprofit${ctx.sources.length ? `, based on a field worker's ${listOf(ctx.sources)}` : ''}. This is the nonprofit's attestation, not independent proof of delivery.`,
+      `Confirmed by the nonprofit${ctx.sources.length ? `, based on a ${listOf(ctx.sources)} from the nonprofit's team` : ''}. This is the nonprofit's attestation, not independent proof of delivery.`,
       ctx.modelDrafted
         ? 'An AI model drafted the facts from the evidence. A person at the nonprofit checked and confirmed them.'
         : 'A person at the nonprofit entered and confirmed these facts.',

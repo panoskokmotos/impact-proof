@@ -50,6 +50,19 @@ export function receivedLine(caseId: string, greek: boolean): string {
   return greek ? `Το λάβαμε ως υπόθεση ${caseId}. Δεν έχει επιβεβαιωθεί ακόμη.` : `Received as case ${caseId}; not yet confirmed.`;
 }
 
+export function retakeTip(greek: boolean): string {
+  return greek
+    ? 'Η φωτογραφία δεν δείχνει καθαρά τα είδη. Βγάλτε μία φωτογραφία με όλα μαζί, από μπροστά και στο φως.'
+    : "The photo doesn't clearly show the items. Take one photo with everything together, from the front, in good light.";
+}
+
+/** Added to the reply on someone's very first message: the fastest way to send a delivery. */
+export function firstTimeTip(greek: boolean): string {
+  return greek
+    ? 'Συμβουλή: ο πιο γρήγορος τρόπος είναι ένα φωνητικό μήνυμα: τι παραδώσατε και πόσα. Μία φωτογραφία με όλα μαζί βοηθά.'
+    : 'Tip: the fastest way is a voice note: what you delivered and how many. One photo with everything together helps.';
+}
+
 export function fallbackQuestion(missing: FactField[], greek: boolean): string | null {
   if (!missing.length) return null;
   const parts = missing.map((f) => LABELS[f][greek ? 1 : 0]).join(', ');
@@ -117,7 +130,9 @@ async function handleMessage(d: Deps, messageId: string) {
   await extractCase(d, c.id);
   const after = store.getCase(d.db, c.id)!;
   const texts = d.db.prepare('SELECT text FROM evidence WHERE case_id=?').all(c.id) as { text: string | null }[];
-  const body = receivedLine(after.id, texts.some((r) => isGreek(r.text))) + (after.question ? `\n${after.question}` : '');
+  const greek = texts.some((r) => isGreek(r.text));
+  const firstMessage = (d.db.prepare('SELECT COUNT(*) AS n FROM inbound_events WHERE from_phone=?').get(ev.from) as { n: number }).n === 1;
+  const body = [receivedLine(after.id, greek), after.question, firstMessage ? firstTimeTip(greek) : null].filter(Boolean).join('\n');
   await enqueueReply(d, after.id, ev, body);
 }
 
@@ -163,8 +178,10 @@ export async function extractCase(d: Deps, caseId: string) {
   }
 
   const next = applyEvidence({ ...base, flags: [] }, SYSTEM(c.tenantId), added, flags);
+  // A photo the model could read nothing from gets a retake tip, not a vague question.
+  const unreadablePhoto = processing.state === 'done' && forModel.some((e) => e.kind === 'image') && !added.some((a) => a.kind === 'observed');
   if (next.status === 'needs_clarification') {
-    next.question = question ?? fallbackQuestion(next.missing, greek) ?? (greek ? 'Οι πηγές διαφέρουν. Μπορείτε να επιβεβαιώσετε;' : 'The sources disagree. Can you confirm?');
+    next.question = question ?? (unreadablePhoto ? retakeTip(greek) : null) ?? fallbackQuestion(next.missing, greek) ?? (greek ? 'Οι πηγές διαφέρουν. Μπορείτε να επιβεβαιώσετε;' : 'The sources disagree. Can you confirm?');
   } else next.question = null;
   store.saveCase(d.db, next, processing);
   store.audit(d.db, caseId, 'system', 'extracted', c.status, next.status, next.version, { evidence: rows.length, facts: added.length, flags: next.flags, processing: processing.state });

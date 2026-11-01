@@ -52,7 +52,8 @@ Emit one assertion per fact per evidence item that states it. Fields:
 - quantity: a number as digits, e.g. "8". If the speaker corrects themselves ("ten, no, eight"), use the final number only.
 - unit: e.g. "boxes", "cartons", "bags". Do not convert units. Do not multiply cartons into items. If the worker counts products without a unit ("4 hair dryers"), the unit is "pieces" (Greek: "τεμάχια"). Do not ask for a unit in that case.
 One delivery can hold several different items. Give each distinct item its own line number (1, 2, 3...) on its item, quantity and unit. Use the SAME line number for the same item across the photo, text and voice note. When a photo shows an item the worker named, use the worker's name for it as the value (e.g. "πιστολάκια μαλλιών", not the brand on the box) and put what you saw in the quote. place, time and delivery_status are for the whole delivery: line 0.
-Field workers are busy: ask a follow-up question only when something needed is truly missing or contradictory, never about details the reviewer can fill in.
+The sender (nonprofit staff or a field worker) is busy: ask a follow-up question only when something needed is truly missing or contradictory, never about details the reviewer can fill in.
+If a photo is too blurry, dark or cropped to count the items, the follow-up question is ONE concrete retake tip instead, e.g. "Βγάλτε μία φωτογραφία με όλα τα κουτιά μαζί, από μπροστά και στο φως."
 - place: the place as stated. time: the date/time as stated, ISO 8601 if clear.
 - delivery_status: "delivered", "not_yet_delivered" or "unclear". Watch for negation ("we haven't delivered yet" = not_yet_delivered).
 kind "reported" = said or written by the worker. kind "observed" = visible in a photo.

@@ -48,7 +48,7 @@ export function inboxPage(user: { email: string; tenantName: string }, cases: Ca
 ${totals.length ? `<ul>${totals.map((t) => `<li><b>${t.quantity} ${esc(t.unit)}</b> of ${esc(t.item)} <span class="muted">(${t.cases} case${t.cases > 1 ? 's' : ''})</span></li>`).join('')}</ul>` : '<p class="muted">No confirmed cases yet.</p>'}
 <p class="muted small">Counted in code from nonprofit-confirmed cases only. Disputed and unreviewed cases are not counted.</p></section>
 <section class="card"><h2>Measured on these cases</h2>
-${stats.confirmed ? `<ul><li>Median <b>${stats.medianMinutes} min</b> from the field worker's first message to a confirmed report (${stats.confirmed} case${stats.confirmed > 1 ? 's' : ''})</li>
+${stats.confirmed ? `<ul><li>Median <b>${stats.medianMinutes} min</b> from the first WhatsApp message to a confirmed report (${stats.confirmed} case${stats.confirmed > 1 ? 's' : ''})</li>
 <li>The model drafted <b>${stats.drafted}</b> facts. The reviewer changed or added <b>${stats.corrected}</b>.</li></ul>` : '<p class="muted">Shown once a case is confirmed.</p>'}
 <p class="muted small">From this nonprofit's own audit trail. Elapsed time includes waiting for the reviewer, not only work time.</p></section>
 <div class="scroll"><table><thead><tr><th>Case</th><th>Status</th><th>Facts</th><th>Flags</th><th>Updated</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="muted">No cases yet. Send a WhatsApp message from an allowlisted phone, or use <a href="/upload">web upload</a>.</td></tr>'}</tbody></table></div>
@@ -95,7 +95,7 @@ ${c.processing !== 'done' ? `<p class="warn">Processing: ${esc(c.processing)}${c
 ${c.flags.map((f) => `<p class="warn">⚠ ${esc(FLAG_LABEL[f] ?? f)}</p>`).join('')}
 ${c.missing.length ? `<p class="warn">Missing: ${esc(c.missing.join(', '))}</p>` : ''}
 ${c.contradictions.map((x) => `<p class="warn">Sources disagree on ${esc(x)}</p>`).join('')}
-${c.question ? `<p>Follow-up question for the field worker: <i>${esc(c.question)}</i> <span class="muted small">(see WhatsApp replies for whether it was sent)</span></p>` : ''}
+${c.question ? `<p>Follow-up question for the sender: <i>${esc(c.question)}</i> <span class="muted small">(see WhatsApp replies for whether it was sent)</span></p>` : ''}
 <div class="grid"><section class="card"><h2>Evidence</h2>${ev || '<p class="muted">None</p>'}</section>
 <section class="card"><h2>Facts and where they came from</h2><div class="scroll"><table><thead><tr><th>Field</th><th>Value</th><th>Basis</th><th>Source</th><th>Quote</th></tr></thead><tbody>${facts || '<tr><td colspan="5" class="muted">No facts yet</td></tr>'}</tbody></table></div>
 <p class="muted small">The model drafts facts. Only a nonprofit reviewer can confirm them.</p></section></div>
@@ -144,7 +144,7 @@ export function uploadPage(user: { email: string; tenantName: string }, phones: 
 <p class="warn">This is not WhatsApp. Use it only when the WhatsApp channel is down. Cases made here are labeled "Web upload".</p>
 ${msg ? `<p>${esc(msg)}</p>` : ''}
 <form method="post" action="/upload" enctype="multipart/form-data" class="card stack">
-<label>Field worker<select name="from">${phones.map((p) => `<option value="${esc(p)}">…${esc(p.slice(-4))}</option>`).join('')}</select></label>
+<label>Sender<select name="from">${phones.map((p) => `<option value="${esc(p)}">…${esc(p.slice(-4))}</option>`).join('')}</select></label>
 <label>Photo or voice note<input type="file" name="file" accept="image/jpeg,image/png,image/webp,audio/*"></label>
 <label>Text<textarea name="text" rows="3"></textarea></label>
 <button>Send</button></form>`, user);

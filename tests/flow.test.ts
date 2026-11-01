@@ -176,3 +176,26 @@ test('webhook verification echoes the challenge only with the right token', asyn
     assert.equal((await fetch(`${t.base}/webhook?hub.mode=subscribe&hub.verify_token=no&hub.challenge=123`)).status, 403);
   } finally { t.close(); }
 });
+
+test('a photo nothing can be read from gets a retake tip, not a vague question', async () => {
+  const t = await startTestApp(byPhrase({}));
+  try {
+    await t.webhook([image('wamid.blur', 'img-blurry')]);
+    await t.drain();
+    const c = store.getCase(t.db, 'DEMO-001')!;
+    assert.equal(c.status, 'needs_clarification');
+    assert.match(c.question ?? '', /Take one photo with everything together/);
+  } finally { t.close(); }
+});
+
+test('only the first message from a sender gets the voice-note tip', async () => {
+  const t = await startTestApp(EIGHT_BOXES);
+  try {
+    await t.webhook([text('wamid.a', 'demo delivery: eight boxes of food, delivered')]);
+    await t.drain();
+    await t.webhook([text('wamid.b', 'eight boxes again')]);
+    await t.drain();
+    assert.match(t.sent[0].body, /Tip: the fastest way is a voice note/);
+    assert.doesNotMatch(t.sent[1].body, /Tip:/);
+  } finally { t.close(); }
+});
