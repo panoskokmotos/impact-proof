@@ -36,6 +36,17 @@ test('conflicting sources: six visible vs ten reported are both kept and flagged
   assert.equal(c.assertions.filter((a) => a.field === 'quantity').length, 2);
 });
 
+test('a transcript spelling slip is not a contradiction, a different place still is', () => {
+  const slip = applyEvidence(blank(), SYSTEM, [
+    ...full('8'),
+    fact('unit', 'κιβώτια', 'ev1'), fact('unit', 'κηβώτια', 'ev2'),
+    fact('place', 'κέντρο της Κυψέλης', 'ev1'), fact('place', 'κέντρο κέντρο της Κιψέλης', 'ev2'),
+  ], []);
+  assert.deepEqual(slip.contradictions, []);
+  const other = applyEvidence(blank(), SYSTEM, [...full('8'), fact('place', 'Κυψέλη', 'ev1'), fact('place', 'Πατήσια', 'ev2')], []);
+  assert.match(other.contradictions[0], /place/);
+});
+
 test('the extraction path cannot create confirmed facts or confirm a case', () => {
   assert.throws(() => applyEvidence(blank(), SYSTEM, [fact('quantity', '8', 'ev1', 'reviewer_confirmed')], []), TransitionError);
   assert.throws(() => applyEvidence(blank(), { ...SYSTEM, role: 'reporter' }, full(), []), TransitionError);

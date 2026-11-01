@@ -20,7 +20,7 @@ Needs Node 24 (no build step). `npm install` adds one dependency, `ffmpeg-static
 ```bash
 npm install
 cp .env.example .env    # fill in the values below
-npm test                # 20 tests: the adversarial pack's rules and the full webhook-to-report flow
+npm test                # 21 tests: the adversarial pack's rules and the full webhook-to-report flow
 npm run probe -- photo.jpg voice.ogg   # first-hour check of your Meta account, 3 runs per fixture
 npm start               # http://localhost:3000, status at /health
 ```

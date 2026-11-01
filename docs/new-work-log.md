@@ -14,4 +14,5 @@
 | 28 Oct | Impact metric from the audit trail: median minutes from first message to confirmed report, and facts the reviewer changed vs drafted; audit records only real corrections |
 | 28 Oct | Voice notes: ffmpeg-static fallback because Homebrew cannot build ffmpeg on macOS 12; Opus to 24 kHz mono 16-bit WAV checked |
 | 1 Nov | Live Meta check passes: muse-spark-1.3, 9/9 runs schema-valid and factually correct (English, Greek self-correction + negation, prompt injection flagged every run); stray env files ignored |
+| 1 Nov | First local end-to-end run (replayed Greek text + web-uploaded Greek voice note, transcribed by muse-voice-transcribe-1.0 in 3.3 s). Found transcript spelling slips («κηβώτια», «Κιψέλης», doubled word) flagged as contradictions; sources are now compared by a spelling key (accents, η/υ/ει/οι → ι, ω → ο, repeated words), stored values unchanged; test added (21) |
 | | |
