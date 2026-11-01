@@ -1,7 +1,8 @@
 import { DELIVERY_STATUSES, FACT_FIELDS, type Assertion, type FactField } from '../domain/types.ts';
+import { isItemField } from '../domain/facts.ts';
 import { chatJson, type MetaConfig, type Usage } from './client.ts';
 
-export const PROMPT_VERSION = 'extract-v1';
+export const PROMPT_VERSION = 'extract-v2';
 
 export type EvidenceForModel =
   | { id: string; kind: 'text' | 'transcript'; text: string }
@@ -26,9 +27,10 @@ export const EXTRACTION_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['field', 'value', 'kind', 'evidence_id', 'quote'],
+        required: ['field', 'value', 'kind', 'evidence_id', 'quote', 'line'],
         properties: {
           field: { type: 'string', enum: [...FACT_FIELDS] },
+          line: { type: 'integer', description: 'Item number 1, 2, 3... for item, quantity and unit; 0 for place, time and delivery_status' },
           value: { type: 'string' },
           kind: { type: 'string', enum: ['observed', 'reported'] },
           evidence_id: { type: 'string' },
@@ -48,7 +50,9 @@ You cannot confirm anything. A person at the nonprofit does that.
 Emit one assertion per fact per evidence item that states it. Fields:
 - item: what was delivered, e.g. "food boxes", "blankets".
 - quantity: a number as digits, e.g. "8". If the speaker corrects themselves ("ten, no, eight"), use the final number only.
-- unit: e.g. "boxes", "cartons", "bags". Do not convert units. Do not multiply cartons into items.
+- unit: e.g. "boxes", "cartons", "bags". Do not convert units. Do not multiply cartons into items. If the worker counts products without a unit ("4 hair dryers"), the unit is "pieces" (Greek: "τεμάχια"). Do not ask for a unit in that case.
+One delivery can hold several different items. Give each distinct item its own line number (1, 2, 3...) on its item, quantity and unit. Use the SAME line number for the same item across the photo, text and voice note. When a photo shows an item the worker named, use the worker's name for it as the value (e.g. "πιστολάκια μαλλιών", not the brand on the box) and put what you saw in the quote. place, time and delivery_status are for the whole delivery: line 0.
+Field workers are busy: ask a follow-up question only when something needed is truly missing or contradictory, never about details the reviewer can fill in.
 - place: the place as stated. time: the date/time as stated, ISO 8601 if clear.
 - delivery_status: "delivered", "not_yet_delivered" or "unclear". Watch for negation ("we haven't delivered yet" = not_yet_delivered).
 kind "reported" = said or written by the worker. kind "observed" = visible in a photo.
@@ -91,7 +95,8 @@ export function validateExtraction(raw: string, evidenceIds: Set<string>, imageI
       : field === 'delivery_status' && !DELIVERY_STATUSES.includes(value as never) ? 'unknown delivery status'
       : null;
     if (reason) { dropped.push(`${field}=${value}: ${reason}`); continue; }
-    assertions.push({ field, value, kind: kind as 'observed' | 'reported', evidenceId, quote: String(a.quote ?? '').slice(0, 300) });
+    const line = isItemField(field) ? Math.max(1, Math.floor(Number(a.line) || 1)) : undefined;
+    assertions.push({ field, value, kind: kind as 'observed' | 'reported', evidenceId, quote: String(a.quote ?? '').slice(0, 300), ...(line ? { line } : {}) });
   }
   const q = typeof parsed.follow_up_question === 'string' ? parsed.follow_up_question.trim() : '';
   const sus = Array.isArray(parsed.suspicious_instructions) ? parsed.suspicious_instructions.map(String).slice(0, 5) : [];

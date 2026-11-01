@@ -1,11 +1,21 @@
-import { type Assertion, type FactField, REQUIRED_FIELDS } from './types.ts';
+import { type Assertion, type FactField, ITEM_FIELDS, REQUIRED_FIELDS } from './types.ts';
 
 // Units we treat as the same thing when comparing two sources. Anything else is compared as written.
 const UNIT_ALIASES: Record<string, string> = {
   box: 'boxes', boxes: 'boxes', κουτί: 'boxes', κουτιά: 'boxes', κιβώτιο: 'boxes', κιβώτια: 'boxes',
   carton: 'cartons', cartons: 'cartons', χαρτοκιβώτιο: 'cartons', χαρτοκιβώτια: 'cartons',
   bag: 'bags', bags: 'bags', σακούλα: 'bags', σακούλες: 'bags',
+  piece: 'pieces', pieces: 'pieces', item: 'pieces', items: 'pieces', τεμάχιο: 'pieces', τεμάχια: 'pieces',
 };
+
+export const isItemField = (field: FactField) => ITEM_FIELDS.includes(field);
+export const lineOf = (a: Assertion) => a.line ?? 1;
+
+/** The item lines a case has, in order. A case with no item facts yet has line 1. */
+export function itemLines(assertions: Assertion[]): number[] {
+  const lines = [...new Set(assertions.filter((a) => isItemField(a.field)).map(lineOf))].sort((a, b) => a - b);
+  return lines.length ? lines : [1];
+}
 
 /**
  * Spelling-only key for comparing words: no accents, Greek letters that sound the same written
@@ -40,9 +50,12 @@ function compareKey(field: FactField, value: string): string {
   return normalize(field, value);
 }
 
-/** The value a field currently has: the latest reviewer value wins, otherwise the latest reported/observed one. */
-export function currentValue(assertions: Assertion[], field: FactField): Assertion | null {
-  const forField = assertions.filter((a) => a.field === field);
+/**
+ * The value a field currently has: the latest reviewer value wins, otherwise the latest reported/observed one.
+ * Item fields are read for one item line; delivery fields ignore the line.
+ */
+export function currentValue(assertions: Assertion[], field: FactField, line = 1): Assertion | null {
+  const forField = assertions.filter((a) => a.field === field && (!isItemField(field) || lineOf(a) === line));
   const reviewed = forField.filter((a) => a.kind === 'reviewer_confirmed');
   if (reviewed.length) return reviewed[reviewed.length - 1];
   const reported = forField.filter((a) => a.kind === 'reported');
@@ -50,8 +63,10 @@ export function currentValue(assertions: Assertion[], field: FactField): Asserti
   return forField[forField.length - 1] ?? null;
 }
 
+/** Required facts still missing on any item line or on the delivery. */
 export function missingFields(assertions: Assertion[]): FactField[] {
-  return REQUIRED_FIELDS.filter((f) => !currentValue(assertions, f));
+  const lines = itemLines(assertions);
+  return REQUIRED_FIELDS.filter((f) => (isItemField(f) ? lines.some((l) => !currentValue(assertions, f, l)) : !currentValue(assertions, f)));
 }
 
 /**
@@ -61,13 +76,20 @@ export function missingFields(assertions: Assertion[]): FactField[] {
  */
 export function contradictions(assertions: Assertion[]): string[] {
   const out: string[] = [];
-  const fields: FactField[] = ['item', 'quantity', 'unit', 'place', 'delivery_status'];
-  for (const field of fields) {
-    const sources = assertions.filter((a) => a.field === field && a.kind !== 'reviewer_confirmed');
-    const values = [...new Set(sources.map((a) => compareKey(field, a.value)))];
+  const lines = itemLines(assertions);
+  const groups: { label: string; sources: Assertion[]; field: FactField }[] = [];
+  for (const field of ['item', 'quantity', 'unit'] as FactField[]) {
+    for (const l of lines) {
+      groups.push({ field, label: lines.length > 1 ? `${field} (item ${l})` : field, sources: assertions.filter((a) => a.field === field && lineOf(a) === l) });
+    }
+  }
+  for (const field of ['place', 'delivery_status'] as FactField[]) groups.push({ field, label: field, sources: assertions.filter((a) => a.field === field) });
+  for (const g of groups) {
+    const sources = g.sources.filter((a) => a.kind !== 'reviewer_confirmed');
+    const values = [...new Set(sources.map((a) => compareKey(g.field, a.value)))];
     if (values.length > 1) {
       const detail = sources.map((a) => `${a.kind} "${a.value}"${a.evidenceId ? ` (${a.evidenceId})` : ''}`).join(' vs ');
-      out.push(`${field}: ${detail}`);
+      out.push(`${g.label}: ${detail}`);
     }
   }
   return out;

@@ -103,3 +103,37 @@ test('place stays out of the report unless the reviewer publishes it', () => {
   const c = review(withPlace, ANA, { decision: 'confirm', reason: '', corrections: {}, publishPlace: false }, allowed);
   assert.ok(!JSON.stringify(buildReport(c)).includes('Odos'));
 });
+
+test('one delivery with two items: no false contradictions, both confirmed, both in report and totals', () => {
+  const at = (line: number, a: ReturnType<typeof fact>) => ({ ...a, line });
+  const c = applyEvidence(blank(), SYSTEM, [
+    at(1, fact('item', 'πιστολάκια μαλλιών', 'ev1')), at(1, fact('quantity', '4', 'ev1')), at(1, fact('unit', 'τεμάχια', 'ev1')),
+    at(2, fact('item', 'σακίδιο', 'ev1')), at(2, fact('quantity', '1', 'ev1')), at(2, fact('unit', 'τεμάχια', 'ev1')),
+    at(1, fact('quantity', '4', 'ev2', 'observed')), at(2, fact('quantity', '1', 'ev2', 'observed')),
+    fact('delivery_status', 'delivered', 'ev1'),
+  ], []);
+  assert.deepEqual(c.contradictions, []);
+  assert.equal(c.status, 'ready_for_review');
+  const done = review(c, ANA, { decision: 'confirm', reason: '', corrections: { quantity_2: '2' }, publishPlace: false }, allowed);
+  const report = buildReport(done);
+  assert.deepEqual(report.items, [
+    { item: 'πιστολάκια μαλλιών', quantity: '4', unit: 'τεμάχια' },
+    { item: 'σακίδιο', quantity: '2', unit: 'τεμάχια' },
+  ]);
+  assert.equal(totals([done]).length, 2);
+});
+
+test('a different count for the same item line is still a contradiction', () => {
+  const c = applyEvidence(blank(), SYSTEM, [...full('8'), { ...fact('quantity', '6', 'ev2', 'observed'), line: 1 }], []);
+  assert.match(c.contradictions[0], /^quantity/);
+});
+
+test('the validator keeps item line numbers and drops them on delivery facts', () => {
+  const raw = JSON.stringify({ assertions: [
+    { field: 'item', value: 'σακίδιο', kind: 'reported', evidence_id: 'ev1', quote: 'σακίδιο', line: 2 },
+    { field: 'place', value: 'Κυψέλη', kind: 'reported', evidence_id: 'ev1', quote: 'Κυψέλη', line: 3 },
+  ], follow_up_question: '', suspicious_instructions: [] });
+  const x = validateExtraction(raw, new Set(['ev1']), new Set());
+  assert.equal(x.assertions[0].line, 2);
+  assert.equal(x.assertions[1].line, undefined);
+});

@@ -1,18 +1,34 @@
-import { currentValue, normalize } from './facts.ts';
+import { currentValue, itemLines, normalize } from './facts.ts';
 import type { Case, FactField } from './types.ts';
 
 export type ReportLine = { label: string; value: string; basis: 'nonprofit_confirmed' | 'reported_only' };
+export type ReportItem = { item: string; quantity: string; unit: string };
 
 export type DonorReport = {
   caseId: string;
   caseVersion: number;
+  items: ReportItem[];
   lines: ReportLine[];
   limits: string[];
 };
 
-const LABELS: Partial<Record<FactField, string>> = {
-  item: 'Item', quantity: 'Quantity', unit: 'Unit', time: 'Delivered on', place: 'Area',
-};
+const LABELS: Partial<Record<FactField, string>> = { time: 'Delivered on', place: 'Area' };
+
+/** Each item line where the reviewer confirmed item, quantity and unit. */
+function confirmedItems(c: Case): ReportItem[] {
+  const out: ReportItem[] = [];
+  for (const line of itemLines(c.assertions)) {
+    const get = (f: FactField) => {
+      const a = currentValue(c.assertions, f, line);
+      return a?.kind === 'reviewer_confirmed' ? a.value : null;
+    };
+    const item = get('item');
+    const quantity = get('quantity');
+    const unit = get('unit');
+    if (item && quantity && unit) out.push({ item, quantity, unit });
+  }
+  return out;
+}
 
 /**
  * Donor-safe report. Built only from a confirmed case, and only from fields a reviewer confirmed.
@@ -21,7 +37,7 @@ const LABELS: Partial<Record<FactField, string>> = {
 export function buildReport(c: Case, ctx: { sources: string[]; modelDrafted: boolean } = { sources: [], modelDrafted: false }): DonorReport {
   if (c.status !== 'confirmed') throw new Error('A donor report needs a nonprofit-confirmed case');
   const lines: ReportLine[] = [];
-  for (const field of ['item', 'quantity', 'unit', 'time', 'place'] as FactField[]) {
+  for (const field of ['time', 'place'] as FactField[]) {
     const a = currentValue(c.assertions, field);
     if (!a || a.kind !== 'reviewer_confirmed') continue;
     lines.push({ label: LABELS[field]!, value: field === 'time' ? a.value.slice(0, 10) : a.value, basis: 'nonprofit_confirmed' });
@@ -29,6 +45,7 @@ export function buildReport(c: Case, ctx: { sources: string[]; modelDrafted: boo
   return {
     caseId: c.id,
     caseVersion: c.version,
+    items: confirmedItems(c),
     lines,
     limits: [
       `Confirmed by the nonprofit${ctx.sources.length ? `, based on a field worker's ${listOf(ctx.sources)}` : ''}. This is the nonprofit's attestation, not independent proof of delivery.`,
@@ -51,19 +68,15 @@ export function totals(cases: Case[]): { item: string; unit: string; quantity: n
   const groups = new Map<string, { item: string; unit: string; quantity: number; cases: number }>();
   for (const c of cases) {
     if (c.status !== 'confirmed') continue;
-    const get = (f: FactField) => {
-      const a = currentValue(c.assertions, f);
-      return a?.kind === 'reviewer_confirmed' ? a.value : null;
-    };
-    const item = get('item');
-    const unit = get('unit');
-    const qty = Number(get('quantity'));
-    if (!item || !unit || !(qty > 0)) continue;
-    const key = `${normalize('item', item)}|${normalize('unit', unit)}`;
-    const g = groups.get(key) ?? { item, unit: normalize('unit', unit), quantity: 0, cases: 0 };
-    g.quantity += qty;
-    g.cases += 1;
-    groups.set(key, g);
+    for (const { item, unit, quantity } of confirmedItems(c)) {
+      const qty = Number(quantity);
+      if (!(qty > 0)) continue;
+      const key = `${normalize('item', item)}|${normalize('unit', unit)}`;
+      const g = groups.get(key) ?? { item, unit: normalize('unit', unit), quantity: 0, cases: 0 };
+      g.quantity += qty;
+      g.cases += 1;
+      groups.set(key, g);
+    }
   }
   return [...groups.values()];
 }

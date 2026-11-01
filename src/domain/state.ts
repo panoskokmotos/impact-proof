@@ -1,6 +1,15 @@
-import { contradictions, missingFields, currentValue } from './facts.ts';
+import { contradictions, missingFields, currentValue, isItemField, itemLines, lineOf } from './facts.ts';
 import type { Actor, Assertion, Case, CaseStatus, FactField, ReviewInput } from './types.ts';
-import { DELIVERY_STATUSES, FACT_FIELDS } from './types.ts';
+import { DELIVERY_STATUSES, FACT_FIELDS, ITEM_FIELDS } from './types.ts';
+
+/** "quantity" → quantity on line 1, "quantity_2" → quantity on line 2, "place" → place. */
+export function parseCorrectionKey(key: string): { field: FactField; line?: number } {
+  const m = /^([a-z_]+?)(?:_(\d+))?$/.exec(key);
+  const field = m?.[1] as FactField;
+  if (!m || !FACT_FIELDS.includes(field)) throw new TransitionError(`Unknown field ${key}`, 400);
+  if (m[2] && !isItemField(field)) throw new TransitionError(`Unknown field ${key}`, 400);
+  return isItemField(field) ? { field, line: m[2] ? Number(m[2]) : 1 } : { field };
+}
 
 export class TransitionError extends Error {
   status: number;
@@ -56,22 +65,31 @@ export function review(c: Case, actor: Actor, input: ReviewInput, allowedReviewe
   if (!input.reason.trim() && input.decision === 'dispute') throw new TransitionError('A dispute needs a reason', 400);
 
   const corrected: Assertion[] = [];
-  for (const [field, raw] of Object.entries(input.corrections)) {
-    if (!FACT_FIELDS.includes(field as FactField)) throw new TransitionError(`Unknown field ${field}`, 400);
+  for (const [key, raw] of Object.entries(input.corrections)) {
+    const { field, line } = parseCorrectionKey(key);
     const value = (raw ?? '').trim();
     if (!value) continue;
     if (field === 'quantity' && !(Number(value) > 0)) throw new TransitionError('Quantity must be a positive number', 400);
     if (field === 'delivery_status' && !DELIVERY_STATUSES.includes(value as never)) {
       throw new TransitionError('Unknown delivery status', 400);
     }
-    corrected.push({ field: field as FactField, value, kind: 'reviewer_confirmed', evidenceId: null, quote: `Set by ${actor.id}` });
+    corrected.push({ field, value, kind: 'reviewer_confirmed', evidenceId: null, quote: `Set by ${actor.id}`, ...(line ? { line } : {}) });
   }
 
   const assertions = [...c.assertions, ...corrected];
   if (input.decision === 'confirm') {
     // Confirming means the reviewer stands behind every required fact. Fill unchanged ones from the current value.
-    for (const field of ['item', 'quantity', 'unit', 'delivery_status', 'time', 'place'] as FactField[]) {
-      if (assertions.some((a) => a.field === field && a.kind === 'reviewer_confirmed')) continue;
+    const confirmedAlready = (field: FactField, line?: number) =>
+      assertions.some((a) => a.field === field && a.kind === 'reviewer_confirmed' && (line === undefined || lineOf(a) === line));
+    for (const line of itemLines(assertions)) {
+      for (const field of ITEM_FIELDS) {
+        if (confirmedAlready(field, line)) continue;
+        const cur = currentValue(assertions, field, line);
+        if (cur) assertions.push({ field, value: cur.value, kind: 'reviewer_confirmed', evidenceId: cur.evidenceId, quote: `Accepted by ${actor.id}`, line });
+      }
+    }
+    for (const field of ['delivery_status', 'time', 'place'] as FactField[]) {
+      if (confirmedAlready(field)) continue;
       const cur = currentValue(assertions, field);
       if (!cur) continue;
       if (field === 'place' && !input.publishPlace) continue;

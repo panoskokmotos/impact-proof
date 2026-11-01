@@ -10,12 +10,17 @@ export const DELIVERY_STATUSES = ['delivered', 'not_yet_delivered', 'unclear'] a
 // reviewer_confirmed: set by an authorized nonprofit reviewer. Only the reviewer can create this kind.
 export type AssertionKind = 'observed' | 'reported' | 'reviewer_confirmed';
 
+// One delivery can hold several items. item, quantity and unit belong to an item line (1, 2, ...);
+// place, time and delivery_status belong to the whole delivery. A fact without a line is line 1.
+export const ITEM_FIELDS: FactField[] = ['item', 'quantity', 'unit'];
+
 export type Assertion = {
   field: FactField;
   value: string;
   kind: AssertionKind;
   evidenceId: string | null; // null only for reviewer_confirmed
   quote: string;
+  line?: number;
 };
 
 export type CaseStatus = 'received' | 'needs_clarification' | 'ready_for_review' | 'confirmed' | 'disputed';
@@ -40,6 +45,7 @@ export type Case = {
 export type ReviewInput = {
   decision: 'confirm' | 'dispute';
   reason: string;
-  corrections: Partial<Record<FactField, string>>;
+  // Keyed by field ("place") or, for item lines, field and line ("quantity_2"). A plain item field is line 1.
+  corrections: Record<string, string>;
   publishPlace: boolean;
 };

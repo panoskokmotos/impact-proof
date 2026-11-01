@@ -1,6 +1,7 @@
 import type { CaseRecord, ImpactStats } from '../store.ts';
 import type { DonorReport } from '../domain/report.ts';
 import type { Assertion } from '../domain/types.ts';
+import { currentValue, isItemField, itemLines, lineOf } from '../domain/facts.ts';
 
 export const esc = (s: unknown) =>
   String(s ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
@@ -72,13 +73,19 @@ export function casePage(
   reports: { token: string; case_version: number }[],
   error: string | null,
 ) {
-  const facts = c.assertions.map((a) => `<tr class="k-${a.kind}"><td>${esc(a.field)}</td><td><b>${esc(a.value)}</b></td><td>${esc(KIND_LABEL[a.kind])}</td><td>${esc(a.evidenceId ?? '')}</td><td class="muted">${esc(a.quote)}</td></tr>`).join('');
+  const facts = c.assertions.map((a) => `<tr class="k-${a.kind}"><td>${esc(a.field)}${isItemField(a.field) ? ` <span class="muted small">#${lineOf(a)}</span>` : ''}</td><td><b>${esc(a.value)}</b></td><td>${esc(KIND_LABEL[a.kind])}</td><td>${esc(a.evidenceId ?? '')}</td><td class="muted">${esc(a.quote)}</td></tr>`).join('');
   const ev = evidence.map((e) => `<div class="ev"><div class="muted small">${esc(e.id)} · ${esc(e.kind)} · ${esc(CHANNEL_LABEL[e.channel] ?? e.channel)} · ${esc(String(e.received_at).slice(11, 19))}</div>
 ${e.kind === 'image' && e.path ? `<img src="/evidence/${esc(e.id)}" alt="Delivery photo ${esc(e.id)}">` : ''}
 ${e.kind === 'audio' && e.path ? `<audio controls src="/evidence/${esc(e.id)}"></audio>` : ''}
 ${e.text ? `<blockquote>${esc(e.text)}</blockquote>` : ''}
 ${e.error ? `<p class="err small">${esc(e.error)}</p>` : ''}</div>`).join('');
-  const last = (k: string) => [...c.assertions].reverse().find((a) => a.field === k)?.value ?? '';
+  const last = (k: Assertion['field'], line = 1) => currentValue(c.assertions, k, line)?.value ?? '';
+  const lines = itemLines(c.assertions);
+  // One row per item, plus an empty row so the reviewer can add an item the evidence missed.
+  const itemRows = [...lines, Math.max(...lines) + 1].map((l) => `<div class="row">
+<label>Item ${l}<input name="item_${l}" value="${esc(last('item', l))}"></label>
+<label>Quantity<input name="quantity_${l}" inputmode="numeric" value="${esc(last('quantity', l))}"></label>
+<label>Unit<input name="unit_${l}" value="${esc(last('unit', l))}"></label></div>`).join('');
   const closed = c.status === 'confirmed' || c.status === 'disputed';
   const current = reports.find((r) => r.case_version === c.version);
   return page(c.id, `<p><a href="/cases">← All cases</a></p>
@@ -95,10 +102,7 @@ ${c.question ? `<p>Follow-up question for the field worker: <i>${esc(c.question)
 
 <section class="card"><h2>${closed ? 'Correct or change the review' : 'Review'}</h2>
 <form method="post" action="/cases/${esc(c.id)}/review" class="stack">
-<div class="row">
-<label>Item<input name="item" value="${esc(last('item'))}"></label>
-<label>Quantity<input name="quantity" inputmode="numeric" value="${esc(last('quantity'))}"></label>
-<label>Unit<input name="unit" value="${esc(last('unit'))}"></label></div>
+${itemRows}
 <div class="row">
 <label>Delivery<select name="delivery_status"><option value="">— choose —</option>${['delivered', 'not_yet_delivered', 'unclear'].map((s) => `<option ${last('delivery_status') === s ? 'selected' : ''}>${s}</option>`).join('')}</select></label>
 <label>Date<input name="time" value="${esc(last('time'))}" placeholder="2026-11-02"></label>
@@ -130,8 +134,8 @@ export function reportPage(r: DonorReport, orgName: string, superseded: boolean)
   return page(`Delivery update ${r.caseId}`, `<article class="card report">
 ${superseded ? '<p class="warn">This report was superseded: the nonprofit corrected or disputed the case after it was made. Do not share it.</p>' : ''}
 <p class="muted small">Delivery update from ${esc(orgName)} · case ${esc(r.caseId)} v${r.caseVersion}</p>
-<h1>${superseded ? '<s>' : ''}${esc(r.lines.find((l) => l.label === 'Quantity')?.value ?? '')} ${esc(r.lines.find((l) => l.label === 'Unit')?.value ?? '')} of ${esc(r.lines.find((l) => l.label === 'Item')?.value ?? '')}${superseded ? '</s>' : ''}</h1>
-<table>${r.lines.map((l) => `<tr><th>${esc(l.label)}</th><td>${esc(l.value)}</td><td class="muted small">${l.basis === 'nonprofit_confirmed' ? 'Confirmed by the nonprofit' : 'Reported, not confirmed'}</td></tr>`).join('')}</table>
+<h1>${superseded ? '<s>' : ''}${esc(reportItems(r).map((i) => `${i.quantity} ${i.unit} of ${i.item}`).join(', '))}${superseded ? '</s>' : ''}</h1>
+<table>${reportItems(r).map((i) => `<tr><th>Item</th><td>${esc(`${i.quantity} ${i.unit} of ${i.item}`)}</td><td class="muted small">Confirmed by the nonprofit</td></tr>`).join('')}${r.lines.filter((l) => !['Item', 'Quantity', 'Unit'].includes(l.label)).map((l) => `<tr><th>${esc(l.label)}</th><td>${esc(l.value)}</td><td class="muted small">${l.basis === 'nonprofit_confirmed' ? 'Confirmed by the nonprofit' : 'Reported, not confirmed'}</td></tr>`).join('')}</table>
 <h2>What this does and does not show</h2><ul>${r.limits.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></article>`);
 }
 
@@ -169,3 +173,10 @@ button{font:inherit;padding:.5rem 1rem;border:0;border-radius:6px;background:var
 button.secondary{background:transparent;color:var(--ink);border:1px solid var(--line)}button.danger{background:transparent;color:var(--err);border:1px solid var(--err)}
 button.link{background:none;color:var(--accent);padding:0}.inline-form{display:inline-block;margin-right:.5rem}
 .report h1{font-size:1.6rem}`;
+
+/** Reports saved before multi-item support kept item, quantity and unit as lines. */
+function reportItems(r: DonorReport) {
+  if (r.items?.length) return r.items;
+  const get = (label: string) => r.lines.find((l) => l.label === label)?.value ?? '';
+  return get('Item') ? [{ item: get('Item'), quantity: get('Quantity'), unit: get('Unit') }] : [];
+}

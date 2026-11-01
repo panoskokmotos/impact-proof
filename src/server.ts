@@ -3,9 +3,9 @@ import { readFileSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import { buildReport, totals } from './domain/report.ts';
-import { review, TransitionError } from './domain/state.ts';
-import { normalize } from './domain/facts.ts';
-import type { Actor, FactField, ReviewInput } from './domain/types.ts';
+import { parseCorrectionKey, review, TransitionError } from './domain/state.ts';
+import { currentValue, normalize } from './domain/facts.ts';
+import type { Actor, ReviewInput } from './domain/types.ts';
 import * as store from './store.ts';
 import * as views from './web/views.ts';
 import { parseWebhook, validSignature } from './whatsapp/webhook.ts';
@@ -164,10 +164,10 @@ export function createApp(d: Deps, cfg: AppConfig) {
 
       if (action === 'review') {
         const f = new URLSearchParams((await readBody(req, 20_000)).toString());
-        const corrections: Partial<Record<FactField, string>> = {};
-        for (const k of ['item', 'quantity', 'unit', 'delivery_status', 'time', 'place'] as FactField[]) {
-          const v = f.get(k)?.trim();
-          if (v) corrections[k] = v;
+        const corrections: Record<string, string> = {};
+        for (const [k, raw] of f) {
+          const v = raw.trim();
+          if (v && /^(item|quantity|unit)(_\d+)?$|^(delivery_status|time|place)$/.test(k)) corrections[k] = v;
         }
         const input: ReviewInput = {
           decision: f.get('decision') === 'confirm' ? 'confirm' : 'dispute',
@@ -176,16 +176,20 @@ export function createApp(d: Deps, cfg: AppConfig) {
           publishPlace: f.get('publish_place') === 'on',
         };
         // Only send fields the reviewer actually changed as corrections; unchanged ones are accepted on confirm.
-        for (const k of Object.keys(corrections) as FactField[]) {
-          const cur = [...c.assertions].reverse().find((a) => a.field === k);
+        const currentFor = (k: string) => {
+          const { field, line } = parseCorrectionKey(k);
+          return { field, cur: currentValue(c.assertions, field, line) };
+        };
+        for (const k of Object.keys(corrections)) {
+          const { cur } = currentFor(k);
           if (cur && cur.value === corrections[k] && cur.kind === 'reviewer_confirmed') delete corrections[k];
           else if (cur && cur.value === corrections[k] && input.decision === 'dispute') delete corrections[k];
         }
         if (!input.publishPlace) delete corrections.place;
         // Fields the reviewer actually changed from the draft, for the accuracy metric. Prefilled values don't count.
-        const changed = (Object.keys(corrections) as FactField[]).filter((k) => {
-          const cur = [...c.assertions].reverse().find((a) => a.field === k);
-          return !cur || normalize(k, cur.value) !== normalize(k, corrections[k]!);
+        const changed = Object.keys(corrections).filter((k) => {
+          const { field, cur } = currentFor(k);
+          return !cur || normalize(field, cur.value) !== normalize(field, corrections[k]!);
         });
         const drafted = new Set(c.assertions.filter((a) => a.kind !== 'reviewer_confirmed').map((a) => a.field)).size;
         try {
