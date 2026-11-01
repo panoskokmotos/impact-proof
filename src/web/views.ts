@@ -134,8 +134,8 @@ export function reportPage(r: DonorReport, orgName: string, superseded: boolean)
   return page(`Delivery update ${r.caseId}`, `<article class="card report">
 ${superseded ? '<p class="warn">This report was superseded: the nonprofit corrected or disputed the case after it was made. Do not share it.</p>' : ''}
 <p class="muted small">Delivery update from ${esc(orgName)} · case ${esc(r.caseId)} v${r.caseVersion}</p>
-<h1>${superseded ? '<s>' : ''}${esc(reportItems(r).map((i) => `${i.quantity} ${i.unit} of ${i.item}`).join(', '))}${superseded ? '</s>' : ''}</h1>
-<table>${reportItems(r).map((i) => `<tr><th>Item</th><td>${esc(`${i.quantity} ${i.unit} of ${i.item}`)}</td><td class="muted small">Confirmed by the nonprofit</td></tr>`).join('')}${r.lines.filter((l) => !['Item', 'Quantity', 'Unit'].includes(l.label)).map((l) => `<tr><th>${esc(l.label)}</th><td>${esc(l.value)}</td><td class="muted small">${l.basis === 'nonprofit_confirmed' ? 'Confirmed by the nonprofit' : 'Reported, not confirmed'}</td></tr>`).join('')}</table>
+<h1>${superseded ? '<s>' : ''}${esc(reportItems(r).map((i) => itemText(i)).join(', '))}${superseded ? '</s>' : ''}</h1>
+<table>${reportItems(r).map((i) => `<tr><th>Item</th><td>${esc(itemText(i))}</td><td class="muted small">Confirmed by the nonprofit</td></tr>`).join('')}${r.lines.filter((l) => !['Item', 'Quantity', 'Unit'].includes(l.label)).map((l) => `<tr><th>${esc(l.label)}</th><td>${esc(l.value)}</td><td class="muted small">${l.basis === 'nonprofit_confirmed' ? 'Confirmed by the nonprofit' : 'Reported, not confirmed'}</td></tr>`).join('')}</table>
 <h2>What this does and does not show</h2><ul>${r.limits.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></article>`);
 }
 
@@ -179,4 +179,13 @@ function reportItems(r: DonorReport) {
   if (r.items?.length) return r.items;
   const get = (label: string) => r.lines.find((l) => l.label === label)?.value ?? '';
   return get('Item') ? [{ item: get('Item'), quantity: get('Quantity'), unit: get('Unit') }] : [];
+}
+
+// Singular for a quantity of 1, so "σακίδιο: 1 τεμάχιο", not "1 τεμάχια".
+const SINGULAR: Record<string, string> = { τεμάχια: 'τεμάχιο', κιβώτια: 'κιβώτιο', κουτιά: 'κουτί', σακούλες: 'σακούλα', pieces: 'piece', boxes: 'box', bags: 'bag', cartons: 'carton' };
+
+/** One item for a donor, worded the same in any language: "σακίδιο: 1 τεμάχιο". */
+function itemText(i: { item: string; quantity: string; unit: string }) {
+  const unit = Number(i.quantity) === 1 ? SINGULAR[i.unit.toLowerCase()] ?? i.unit : i.unit;
+  return `${i.item}: ${i.quantity} ${unit}`;
 }

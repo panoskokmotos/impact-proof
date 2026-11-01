@@ -139,7 +139,7 @@ test('reviewer flow over HTTP: unauthenticated and cross-tenant are blocked; con
     await t.post('/cases/DEMO-001/report', ana, {});
     const { token } = t.db.prepare('SELECT token FROM reports').get() as { token: string };
     const html = await (await fetch(`${t.base}/r/${token}`)).text();
-    assert.match(html, /8 boxes of food boxes/);
+    assert.match(html, /food boxes: 8 boxes/);
     assert.match(html, /not independent proof/);
     assert.doesNotMatch(html, new RegExp(PHONE));
     assert.doesNotMatch(html, /superseded/);
