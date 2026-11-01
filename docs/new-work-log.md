@@ -13,4 +13,5 @@
 | 27 Oct | Domain rules (facts, state machine, report, totals), Meta client and extraction schema, WhatsApp webhook/send/media, durable worker, reviewer UI, donor report, 19 tests, probe and replay scripts |
 | 28 Oct | Impact metric from the audit trail: median minutes from first message to confirmed report, and facts the reviewer changed vs drafted; audit records only real corrections |
 | 28 Oct | Voice notes: ffmpeg-static fallback because Homebrew cannot build ffmpeg on macOS 12; Opus to 24 kHz mono 16-bit WAV checked |
+| 1 Nov | Live Meta check passes: muse-spark-1.3, 9/9 runs schema-valid and factually correct (English, Greek self-correction + negation, prompt injection flagged every run); stray env files ignored |
 | | |
