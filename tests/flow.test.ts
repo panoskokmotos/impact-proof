@@ -23,6 +23,15 @@ test('text in → one case → one reply; a replayed webhook creates nothing new
   } finally { t.close(); }
 });
 
+test('a worker who writes Greek gets the reply in Greek', async () => {
+  const t = await startTestApp(byPhrase({ 'κιβώτια': [['item', 'τρόφιμα'], ['quantity', '8'], ['unit', 'κιβώτια'], ['delivery_status', 'delivered']] }));
+  try {
+    await t.webhook([text('wamid.gr', 'Παραδώσαμε 8 κιβώτια τρόφιμα')]);
+    await t.drain();
+    assert.match(t.sent[0].body, /^Το λάβαμε ως υπόθεση DEMO-001\. Δεν έχει επιβεβαιωθεί ακόμη\./);
+  } finally { t.close(); }
+});
+
 test('bad signature and unknown senders are rejected without a case', async () => {
   const t = await startTestApp(EIGHT_BOXES);
   try {

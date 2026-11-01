@@ -43,6 +43,13 @@ const LABELS: Record<FactField, [string, string]> = {
   time: ['when', 'πότε'],
 };
 
+export const isGreek = (text: string | null | undefined) => /[Ͱ-Ͽ]/.test(text ?? '');
+
+/** The reply a field worker gets for every message, in the language they wrote or spoke in. */
+export function receivedLine(caseId: string, greek: boolean): string {
+  return greek ? `Το λάβαμε ως υπόθεση ${caseId}. Δεν έχει επιβεβαιωθεί ακόμη.` : `Received as case ${caseId}; not yet confirmed.`;
+}
+
 export function fallbackQuestion(missing: FactField[], greek: boolean): string | null {
   if (!missing.length) return null;
   const parts = missing.map((f) => LABELS[f][greek ? 1 : 0]).join(', ');
@@ -109,7 +116,8 @@ async function handleMessage(d: Deps, messageId: string) {
 
   await extractCase(d, c.id);
   const after = store.getCase(d.db, c.id)!;
-  const body = `Received as case ${after.id}; not yet confirmed.` + (after.question ? `\n${after.question}` : '');
+  const texts = d.db.prepare('SELECT text FROM evidence WHERE case_id=?').all(c.id) as { text: string | null }[];
+  const body = receivedLine(after.id, texts.some((r) => isGreek(r.text))) + (after.question ? `\n${after.question}` : '');
   await enqueueReply(d, after.id, ev, body);
 }
 
@@ -131,7 +139,7 @@ export async function extractCase(d: Deps, caseId: string) {
     else if (r.kind === 'audio' && r.text) forModel.push({ id: r.id, kind: 'transcript', text: r.text });
     else if (r.kind === 'text' && r.text) forModel.push({ id: r.id, kind: 'text', text: r.text });
   }
-  const greek = rows.some((r) => /[Ͱ-Ͽ]/.test(r.text ?? ''));
+  const greek = rows.some((r) => isGreek(r.text));
   const base = { ...c, assertions: c.assertions.filter((a) => a.kind === 'reviewer_confirmed') };
 
   let processing = { state: 'done', error: null as string | null };
